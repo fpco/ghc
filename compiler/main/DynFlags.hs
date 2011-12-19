@@ -29,6 +29,7 @@ module DynFlags (
         xopt_set,
         xopt_unset,
         DynFlags(..),
+        HasDynFlags(..),
         RtsOptsEnabled(..),
         HscTarget(..), isObjectTarget, defaultObjectTarget,
         targetRetainsAllBindings,
@@ -587,6 +588,9 @@ data DynFlags = DynFlags {
   -- | what kind of {-# SCC #-} to add automatically
   profAuto              :: ProfAuto
  }
+
+class HasDynFlags m where
+    getDynFlags :: m DynFlags
 
 data ProfAuto
   = NoProfAuto         -- ^ no SCC annotations added
