@@ -29,7 +29,7 @@ module DynFlags (
         xopt_set,
         xopt_unset,
         DynFlags(..),
-        HasDynFlags(..),
+        HasDynFlags(..), ContainsDynFlags(..),
         RtsOptsEnabled(..),
         HscTarget(..), isObjectTarget, defaultObjectTarget,
         targetRetainsAllBindings,
@@ -591,6 +591,9 @@ data DynFlags = DynFlags {
 
 class HasDynFlags m where
     getDynFlags :: m DynFlags
+
+class ContainsDynFlags t where
+    extractDynFlags :: t -> DynFlags
 
 data ProfAuto
   = NoProfAuto         -- ^ no SCC annotations added
