@@ -314,7 +314,7 @@ import Data.Typeable    ( Typeable )
 import Data.Word        ( Word8 )
 import Control.Monad
 import System.Exit	( exitWith, ExitCode(..) )
-import System.Time	( getClockTime )
+import System.Time	( getClockTime, TimeDiff(..), addToClockTime )
 import Exception
 import Data.IORef
 import System.FilePath
@@ -473,8 +473,34 @@ setSessionDynFlags :: GhcMonad m => DynFlags -> m [PackageId]
 setSessionDynFlags dflags = do
   (dflags', preload) <- liftIO $ initPackages dflags
   modifySession (\h -> h{ hsc_dflags = dflags' })
+  invalidateModSummaryCache
   return preload
 
+-- When changing the DynFlags, we want the changes to apply to future
+-- loads, but without completely discarding the program.  But the
+-- DynFlags are cached in each ModSummary in the hsc_mod_graph, so
+-- after a change to DynFlags, the changes would apply to new modules
+-- but not existing modules; this seems undesirable.
+--
+-- Furthermore, the GHC API client might expect that changing
+-- log_action would affect future compilation messages, but for those
+-- modules we have cached ModSummaries for, we'll continue to use the
+-- old log_action.  This is definitely wrong (#7478).
+--
+-- Hence, we invalidate the ModSummary cache after changing the
+-- DynFlags.  We do this by tweaking the date on each ModSummary, so
+-- that the next downsweep will think that all the files have changed
+-- and preprocess them again.  This won't necessarily cause everything
+-- to be recompiled, because by the time we check whether we need to
+-- recopmile a module, we'll have re-summarised the module and have a
+-- correct ModSummary.
+--
+invalidateModSummaryCache :: GhcMonad m => m ()
+invalidateModSummaryCache =
+  modifySession $ \h -> h { hsc_mod_graph = map inval (hsc_mod_graph h) }
+ where
+  tdiff = TimeDiff 0 0 0 0 0 (-1) 0
+  inval ms = ms { ms_hs_date = addToClockTime tdiff (ms_hs_date ms) }
 
 parseDynamicFlags :: Monad m =>
                      DynFlags -> [Located String]
