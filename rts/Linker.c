@@ -882,6 +882,7 @@ typedef struct _RtsSymbolVal {
       SymI_HasProto(stg_ap_d_ret)                       \
       SymI_HasProto(stg_ap_l_ret)                       \
       SymI_HasProto(stg_ap_v16_ret)                     \
+      SymI_HasProto(stg_ap_v32_ret)                     \
       SymI_HasProto(stg_ap_n_ret)                       \
       SymI_HasProto(stg_ap_p_ret)                       \
       SymI_HasProto(stg_ap_pv_ret)                      \
@@ -1236,6 +1237,7 @@ typedef struct _RtsSymbolVal {
       SymI_HasProto(stg_ap_d_info)                                      \
       SymI_HasProto(stg_ap_l_info)                                      \
       SymI_HasProto(stg_ap_v16_info)                                    \
+      SymI_HasProto(stg_ap_v32_info)                                    \
       SymI_HasProto(stg_ap_n_info)                                      \
       SymI_HasProto(stg_ap_p_info)                                      \
       SymI_HasProto(stg_ap_pv_info)                                     \
@@ -1252,6 +1254,7 @@ typedef struct _RtsSymbolVal {
       SymI_HasProto(stg_ap_d_fast)                                      \
       SymI_HasProto(stg_ap_l_fast)                                      \
       SymI_HasProto(stg_ap_v16_fast)                                    \
+      SymI_HasProto(stg_ap_v32_fast)                                    \
       SymI_HasProto(stg_ap_n_fast)                                      \
       SymI_HasProto(stg_ap_p_fast)                                      \
       SymI_HasProto(stg_ap_pv_fast)                                     \
