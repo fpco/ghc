@@ -848,7 +848,7 @@ hscFileFrontEnd :: ModSummary -> Hsc TcGblEnv
 hscFileFrontEnd mod_summary = do
     hpm <- hscParse' mod_summary
     hsc_env <- getHscEnv
-    tcg_env <- tcRnModule' hsc_env mod_summary False hpm
+    tcg_env <- tcRnModule' hsc_env mod_summary True hpm
     return tcg_env
 
 --------------------------------------------------------------
