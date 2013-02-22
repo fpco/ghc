@@ -115,6 +115,7 @@ import Outputable
 import Foreign.C        ( CInt(..) )
 #endif
 import {-# SOURCE #-} ErrUtils ( Severity(..), Message, mkLocMessage )
+import {-# SOURCE #-} HscPlugin (HscPlugin)
 
 #ifdef GHCI
 import System.IO.Unsafe ( unsafePerformIO )
@@ -526,6 +527,7 @@ data DynFlags = DynFlags {
   -- Plugins
   pluginModNames        :: [ModuleName],
   pluginModNameOpts     :: [(ModuleName,String)],
+  sourcePlugins         :: [HscPlugin],
 
   --  For ghc -M
   depMakefile           :: FilePath,
@@ -881,6 +883,7 @@ defaultDynFlags mySettings =
 
         pluginModNames          = [],
         pluginModNameOpts       = [],
+        sourcePlugins           = [],
 
         outputFile              = Nothing,
         outputHi                = Nothing,

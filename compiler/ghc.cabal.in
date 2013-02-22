@@ -320,6 +320,7 @@ Library
         DynamicLoading
         HeaderInfo
         HscMain
+        HscPlugin
         HscStats
         HscTypes
         InteractiveEval

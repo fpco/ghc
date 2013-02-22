@@ -130,6 +130,7 @@ import NameSet          ( emptyNameSet )
 import InstEnv
 import FamInstEnv
 import Fingerprint      ( Fingerprint )
+import HscPlugin
 
 import DynFlags
 import ErrUtils
@@ -149,6 +150,7 @@ import Data.List
 import Control.Monad
 import Data.Maybe
 import Data.IORef
+import Data.Monoid (mconcat)
 import System.FilePath as FilePath
 import System.Directory
 
@@ -633,8 +635,10 @@ genericHscRecompile compiler mod_summary mb_old_hash
     | ExtCoreFile <- ms_hsc_src mod_summary =
         panic "GHC does not currently support reading External Core files"
     | otherwise = do
-        tc_result <- hscFileFrontEnd mod_summary
-        hscBackend compiler tc_result mod_summary mb_old_hash
+        dynFlags   <- getDynFlags
+        tc_result  <- hscFileFrontEnd mod_summary
+        tc_result' <- runHscPlugin (mconcat (sourcePlugins dynFlags)) dynFlags tc_result
+        hscBackend compiler tc_result' mod_summary mb_old_hash
 
 genericHscBackend :: HsCompiler a
                   -> TcGblEnv -> ModSummary -> Maybe Fingerprint
