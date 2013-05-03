@@ -45,6 +45,7 @@ import System.Environment
 import System.IO
 import Control.Monad as Monad
 import GHC.Exts
+import Control.Concurrent
 
 import System.Console.Haskeline (CompletionFunc, InputT)
 import qualified System.Console.Haskeline as Haskeline
@@ -261,9 +262,10 @@ runStmt expr step = do
     withProgName (progname st) $
     withArgs (args st) $
       reflectGHCi x $ do
+        _tidMVar <- liftIO $ newEmptyMVar
         GHC.handleSourceError (\e -> do GHC.printException e; 
                                         return Nothing) $ do
-          r <- GHC.runStmtWithLocation (progname st) (line_number st) expr step
+          r <- GHC.runStmtWithLocation (progname st) (line_number st) expr step _tidMVar
           return (Just r)
 
 runDecls :: String -> GHCi [GHC.Name]

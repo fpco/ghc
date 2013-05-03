@@ -186,14 +186,14 @@ findEnclosingDecls hsc_env inf =
 
 -- | Run a statement in the current interactive context.  Statement
 -- may bind multple values.
-runStmt :: GhcMonad m => String -> SingleStep -> m RunResult
+runStmt :: GhcMonad m => String -> SingleStep -> MVar (Maybe ThreadId) -> m RunResult
 runStmt = runStmtWithLocation "<interactive>" 1
 
 -- | Run a statement in the current interactive context.  Passing debug information
 --   Statement may bind multple values.
 runStmtWithLocation :: GhcMonad m => String -> Int -> 
-                       String -> SingleStep -> m RunResult 
-runStmtWithLocation source linenumber expr step =
+                       String -> SingleStep -> MVar (Maybe ThreadId) -> m RunResult 
+runStmtWithLocation source linenumber expr step tidMVar =
   do
     hsc_env <- getSession
 
@@ -215,7 +215,7 @@ runStmtWithLocation source linenumber expr step =
           withVirtualCWD $
             withBreakAction (isStep step) dflags' breakMVar statusMVar $ do
                 let thing_to_run = unsafeCoerce# hval :: IO [HValue]
-                liftIO $ sandboxIO dflags' statusMVar thing_to_run
+                liftIO $ sandboxIO dflags' statusMVar tidMVar thing_to_run
               
         let ic = hsc_IC hsc_env
             bindings = (ic_tythings ic, ic_rn_gbl_env ic)
@@ -381,10 +381,13 @@ foreign import ccall "&rts_breakpoint_io_action"
 -- thread blocked (forkIO inherits mask from the parent, #1048), and unblock
 -- only while we execute the user's code.  We can't afford to lose the final
 -- putMVar, otherwise deadlock ensues. (#1583, #1922, #1946)
-sandboxIO :: DynFlags -> MVar Status -> IO [HValue] -> IO Status
-sandboxIO dflags statusMVar thing =
+sandboxIO :: DynFlags -> MVar Status -> MVar (Maybe ThreadId) -> IO [HValue] -> IO Status
+sandboxIO dflags statusMVar tidMVar thing =
    mask $ \restore -> -- fork starts blocked
-     let runIt = liftM Complete $ try (restore $ rethrow dflags thing)
+     let thing' = gbracket (myThreadId >>= putMVar tidMVar . Just)
+                           (\() -> modifyMVar_ tidMVar (\_ -> return Nothing))
+                           (\() -> thing)
+         runIt  = liftM Complete $ try (restore $ rethrow dflags thing')
      in if dopt Opt_GhciSandbox dflags
         then do tid <- forkIO $ do res <- runIt
                                    putMVar statusMVar res -- empty: can't block
