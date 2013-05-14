@@ -1460,18 +1460,13 @@ AC_SUBST([GccExtraViaCOpts],$fp_cv_gcc_extra_opts)
 # ---------------------
 AC_DEFUN([FP_SETUP_PROJECT_VERSION],
 [
-if test "$RELEASE" = "NO"; then
+if test "$RELEASE" = "YES"; then
     AC_MSG_CHECKING([for GHC version date])
     if test -f VERSION_DATE; then
         PACKAGE_VERSION=${PACKAGE_VERSION}.`cat VERSION_DATE`
         AC_MSG_RESULT(given $PACKAGE_VERSION)
     elif test -d .git; then
-        changequote(, )dnl
-        ver_date=`git log -n 1 --date=short --pretty=format:%ci | cut -d ' ' -f 1 | tr -d -`
-        if echo $ver_date | grep '^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$' 2>&1 >/dev/null; then true; else
-        changequote([, ])dnl
-                AC_MSG_ERROR([failed to detect version date: check that git is in your path])
-        fi
+        ver_date=`git rev-parse --short HEAD`
         PACKAGE_VERSION=${PACKAGE_VERSION}.$ver_date
         AC_MSG_RESULT(inferred $PACKAGE_VERSION)
     elif test -d _darcs; then
