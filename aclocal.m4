@@ -1461,13 +1461,15 @@ AC_SUBST([GccExtraViaCOpts],$fp_cv_gcc_extra_opts)
 AC_DEFUN([FP_SETUP_PROJECT_VERSION],
 [
 if test "$RELEASE" = "YES"; then
-    AC_MSG_CHECKING([for GHC version date])
+    AC_MSG_CHECKING([for GHC version patchlevel])
     if test -f VERSION_DATE; then
         PACKAGE_VERSION=${PACKAGE_VERSION}.`cat VERSION_DATE`
         AC_MSG_RESULT(given $PACKAGE_VERSION)
     elif test -d .git; then
-        ver_date=`git rev-parse --short HEAD`
-        PACKAGE_VERSION=${PACKAGE_VERSION}.$ver_date
+        changequote(, )dnl
+        ver_patchlevel=`git describe --tags --match "*release" | sed 's/^.*release-\([0-9]*\)-.*$/\1'/`
+        changequote([, ])dnl
+        PACKAGE_VERSION=${PACKAGE_VERSION}.$ver_patchlevel
         AC_MSG_RESULT(inferred $PACKAGE_VERSION)
     elif test -d _darcs; then
         # TODO: Remove this branch after conversion to Git
