@@ -670,11 +670,6 @@ the splice is run by the *renamer* rather than the type checker.
 See Note [Quasi-quote overview] in TcSplice.
 
 \begin{code}
-getDynFlags :: RnM DynFlags
-getDynFlags = do
-  env <- getEnv
-  return (hsc_dflags (env_top env)) 
-
 runQuasiQuote :: Outputable hs_syn
               => HsQuasiQuote RdrName   -- Contains term of type QuasiQuoter, and the String
               -> Name                   -- Of type QuasiQuoter -> String -> Q th_syn
@@ -712,10 +707,10 @@ runQuasiQuote (HsQuasiQuote quoter q_span quote) quote_selector meta_ty meta_ops
         ; traceTc "runQQ" (ppr quoter <+> ppr is_local)
 
           -- Notify any source plugins about the QQ
-        ; dynFlags <- getDynFlags
+        ; env <- getEnv 
         ; HsQuasiQuote quoter' q_span quote <- 
-            runHscQQ (mconcat (sourcePlugins dynFlags)) 
-                     dynFlags
+            runHscQQ (mconcat . sourcePlugins . hsc_dflags . env_top $ env) 
+                     env 
                      (HsQuasiQuote quoter' q_span quote)
 
           -- Build the expression
