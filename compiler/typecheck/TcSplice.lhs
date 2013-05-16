@@ -75,6 +75,9 @@ import BasicTypes
 import Panic
 import FastString
 import Control.Monad    ( when )
+import HscPlugin
+import Data.Monoid (mconcat)
+import DynFlags (DynFlags(sourcePlugins))
 
 import qualified Language.Haskell.TH as TH
 -- THSyntax gives access to internal functions and data types
@@ -667,6 +670,11 @@ the splice is run by the *renamer* rather than the type checker.
 See Note [Quasi-quote overview] in TcSplice.
 
 \begin{code}
+getDynFlags :: RnM DynFlags
+getDynFlags = do
+  env <- getEnv
+  return (hsc_dflags (env_top env)) 
+
 runQuasiQuote :: Outputable hs_syn
               => HsQuasiQuote RdrName   -- Contains term of type QuasiQuoter, and the String
               -> Name                   -- Of type QuasiQuoter -> String -> Q th_syn
@@ -702,6 +710,13 @@ runQuasiQuote (HsQuasiQuote quoter q_span quote) quote_selector meta_ty meta_ops
         ; checkTc (not is_local) (quoteStageError quoter')
 
         ; traceTc "runQQ" (ppr quoter <+> ppr is_local)
+
+          -- Notify any source plugins about the QQ
+        ; dynFlags <- getDynFlags
+        ; HsQuasiQuote quoter' q_span quote <- 
+            runHscQQ (mconcat (sourcePlugins dynFlags)) 
+                     dynFlags
+                     (HsQuasiQuote quoter' q_span quote)
 
           -- Build the expression
         ; let quoterExpr = L q_span $! HsVar $! quoter'
