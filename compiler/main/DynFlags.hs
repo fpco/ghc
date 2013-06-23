@@ -950,6 +950,7 @@ defaultLogAction severity srcSpan style msg
    SevOutput -> printSDoc msg style
    SevInfo   -> printErrs msg style
    SevFatal  -> printErrs msg style
+   SevInteractive -> putStrSDoc msg style
    _         -> do hPutChar stderr '\n'
                    printErrs (mkLocMessage srcSpan msg) style
                    -- careful (#2302): printErrs prints in UTF-8, whereas

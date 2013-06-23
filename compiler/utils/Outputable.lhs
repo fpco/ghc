@@ -41,6 +41,7 @@ module Outputable (
         printSDoc, printErrs, printOutput, hPrintDump, printDump,
         printForC, printForAsm, printForUser, printForUserPartWay,
         pprCode, mkCodeStyle,
+        putStrSDoc,
         showSDoc, showSDocOneLine,
         showSDocForUser, showSDocDebug, showSDocDump, showSDocDumpOneLine,
         showPpr,
@@ -322,6 +323,12 @@ printSDoc :: SDoc -> PprStyle -> IO ()
 printSDoc d sty = do
   Pretty.printDoc PageMode stdout (runSDoc d (initSDocContext sty))
   hFlush stdout
+
+putStrSDoc :: SDoc -> PprStyle -> IO ()
+putStrSDoc d sty = do
+  let doc = runSDoc d (initSDocContext sty)
+  putStr (Pretty.render doc)
+  hFlush stdout 
 
 -- I'm not sure whether the direct-IO approach of Pretty.printDoc
 -- above is better or worse than the put-big-string approach here

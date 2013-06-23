@@ -60,6 +60,8 @@ pprMessageBag msgs = vcat (punctuate blankLine (bagToList msgs))
 
 data Severity
   = SevOutput
+  | SevDump
+  | SevInteractive
   | SevInfo
   | SevWarning
   | SevError
