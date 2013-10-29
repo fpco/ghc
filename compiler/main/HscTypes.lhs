@@ -1796,6 +1796,7 @@ data ModSummary
         ms_location     :: ModLocation,         -- ^ Location of the various files belonging to the module
         ms_hs_date      :: ClockTime,           -- ^ Timestamp of source file
         ms_obj_date     :: Maybe ClockTime,     -- ^ Timestamp of object, if we have one
+        ms_usage_files  :: [(FilePath,Maybe ClockTime)], -- ^ Usage files and their timestamps
         ms_srcimps      :: [Located (ImportDecl RdrName)],      -- ^ Source imports of the module
         ms_textual_imps :: [Located (ImportDecl RdrName)],      -- ^ Non-source imports of the module from the module *text*
         ms_hspp_file    :: FilePath,            -- ^ Filename of preprocessed source file
@@ -1847,6 +1848,7 @@ instance Outputable ModSummary where
    ppr ms
       = sep [text "ModSummary {",
              nest 3 (sep [text "ms_hs_date = " <> text (show (ms_hs_date ms)),
+                          text "ms_usage_files = " <> text (show (ms_usage_files ms)),
                           text "ms_mod =" <+> ppr (ms_mod ms)
                                 <> text (hscSourceString (ms_hsc_src ms)) <> comma,
                           text "ms_textual_imps =" <+> ppr (ms_textual_imps ms),

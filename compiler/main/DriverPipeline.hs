@@ -954,6 +954,7 @@ runPhase (Hsc src_flavour) input_fn dflags0
                                         ms_hspp_buf  = hspp_buf,
                                         ms_location  = location4,
                                         ms_hs_date   = src_timestamp,
+                                        ms_usage_files = [],
                                         ms_obj_date  = Nothing,
                                         ms_textual_imps = imps,
                                         ms_srcimps      = src_imps }

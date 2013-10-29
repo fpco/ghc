@@ -45,7 +45,6 @@ import TcIface          ( typecheckIface )
 import TcRnMonad        ( initIfaceCheck )
 import RdrName          ( RdrName )
 
-import Exception        ( evaluate, tryIO )
 import Panic
 import SysTools
 import BasicTypes
@@ -53,6 +52,8 @@ import SrcLoc
 import Util
 import Digraph
 import Bag              ( listToBag )
+import Exception        ( evaluate, tryIO, catchIO, gbracket, gfinally )
+import FastString
 import Maybes           ( expectJust, mapCatMaybes )
 import StringBuffer
 import FastString
@@ -69,6 +70,8 @@ import System.Time      ( ClockTime )
 import System.FilePath
 import Control.Monad
 import Data.Maybe
+import Data.Either
+import Data.IORef
 import Data.List
 import qualified Data.List as List
 
@@ -274,7 +277,7 @@ load2 how_much mod_graph = do
                                    2 (ppr mg))
 
         setSession hsc_env{ hsc_HPT = emptyHomePackageTable }
-        (upsweep_ok, modsUpswept)
+        (upsweep_ok, modsUpswept, modsNotUpswept)
            <- upsweep pruned_hpt stable_mods cleanup mg
 
         -- Make modsDone be the summaries for each home module now
@@ -282,6 +285,10 @@ load2 how_much mod_graph = do
         -- Get in in a roughly top .. bottom order (hence reverse).
 
         let modsDone = reverse modsUpswept
+
+        -- The upswept modules were possibly changed, so update the module graph.
+        modifySession $ \hsc_env -> hsc_env
+            { hsc_mod_graph = modsUpswept ++ modsNotUpswept }
 
         -- Try and do linking in some form, depending on whether the
         -- upsweep was completely or only partially successful.
@@ -524,10 +531,12 @@ unload hsc_env stable_linkables -- Unload everthing *except* 'stable_linkables'
         all stableObject (imports m)
         && old linkable does not exist, or is == on-disk .o
         && date(on-disk .o) > date(.hs)
+        && old usage file hashes == new usage file hashes
 
   stableBCO m =
         all stable (imports m)
         && date(BCO) > date(.hs)
+        && old usage file hashes == new usage file hashes
 @
 
   These properties embody the following ideas:
@@ -590,7 +599,8 @@ checkStability hpt sccs all_home_mods = foldl checkSCC ([],[]) sccs
           where
              same_as_prev t = case lookupUFM hpt (ms_mod_name ms) of
                                 Just hmi  | Just l <- hm_linkable hmi
-                                 -> isObjectLinkable l && t == linkableTime l
+                                 -> isObjectLinkable l && t == linkableTime l &&
+                                    usageFilesMatch hmi ms
                                 _other  -> True
                 -- why '>=' rather than '>' above?  If the filesystem stores
                 -- times to the nearset second, we may occasionally find that
@@ -606,9 +616,19 @@ checkStability hpt sccs all_home_mods = foldl checkSCC ([],[]) sccs
           | dopt Opt_ForceRecomp (ms_hspp_opts ms) = False
           | otherwise = case lookupUFM hpt (ms_mod_name ms) of
                 Just hmi  | Just l <- hm_linkable hmi ->
-                        not (isObjectLinkable l) && 
-                        linkableTime l >= ms_hs_date ms
+                        not (isObjectLinkable l) &&
+                        linkableTime l >= ms_hs_date ms &&
+                        usageFilesMatch hmi ms
                 _other  -> False
+
+        -- Check that the usage file timestamps in the old HMI match
+        -- those in the new ModSummary
+        usageFilesMatch :: HomeModInfo -> ModSummary -> Bool
+        usageFilesMatch hmi ms = ms_usage_files ms == old_usage_files
+          where
+            usages          = mi_usages (hm_iface hmi)
+            old_usage_files = [(file, Just hash)  | UsageFile file hash  <- usages]
+
 
 -- -----------------------------------------------------------------------------
 
@@ -626,30 +646,32 @@ upsweep
     -> (HscEnv -> IO ())           -- ^ How to clean up unwanted tmp files
     -> [SCC ModSummary]         -- ^ Mods to do (the worklist)
     -> m (SuccessFlag,
+          [ModSummary],
           [ModSummary])
        -- ^ Returns:
        --
        --  1. A flag whether the complete upsweep was successful.
        --  2. The 'HscEnv' in the monad has an updated HPT
        --  3. A list of modules which succeeded loading.
+       --  4. A list of modules which weren't loaded.
 
 upsweep old_hpt stable_mods cleanup sccs = do
-   (res, done) <- upsweep' old_hpt [] sccs 1 (length sccs)
-   return (res, reverse done)
+   (res, done, notDone) <- upsweep' old_hpt [] sccs 1 (length sccs)
+   return (res, reverse done, flattenSCCs notDone)
  where
 
   upsweep' _old_hpt done
      [] _ _
-   = return (Succeeded, done)
+   = return (Succeeded, done, [])
 
   upsweep' _old_hpt done
-     (CyclicSCC ms:_) _ _
+     mg@(CyclicSCC ms:_) _ _
    = do dflags <- getSessionDynFlags
         liftIO $ fatalErrorMsg dflags (cyclicModuleErr ms)
-        return (Failed, done)
+        return (Failed, done, mg)
 
   upsweep' old_hpt done
-     (AcyclicSCC mod:mods) mod_index nmods
+     mg@(AcyclicSCC mod:mods) mod_index nmods
    = do -- putStrLn ("UPSWEEP_MOD: hpt = " ++ 
         --           show (map (moduleUserString.moduleName.mi_module.hm_iface) 
         --                     (moduleEnvElts (hsc_HPT hsc_env)))
@@ -669,7 +691,7 @@ upsweep old_hpt stable_mods cleanup sccs = do
                  return (Just mod_info)
 
         case mb_mod_info of
-          Nothing -> return (Failed, done)
+          Nothing -> return (Failed, done, mg)
           Just mod_info -> do
                 let this_mod = ms_mod_name mod
 
@@ -687,14 +709,26 @@ upsweep old_hpt stable_mods cleanup sccs = do
                     old_hpt1 | isBootSummary mod = old_hpt
                              | otherwise = delFromUFM old_hpt this_mod
 
-                    done' = mod:done
+                -- Update the usage files of this mod with data from the
+                -- newly generated HMI
+                let mod'  = updateUsageFiles mod_info mod
+                    done' = mod':done
 
                         -- fixup our HomePackageTable after we've finished compiling
                         -- a mutually-recursive loop.  See reTypecheckLoop, below.
-                hsc_env2 <- liftIO $ reTypecheckLoop hsc_env1 mod done'
+                hsc_env2 <- liftIO $ reTypecheckLoop hsc_env1 mod' done'
                 setSession hsc_env2
 
                 upsweep' old_hpt1 done' mods (mod_index+1) nmods
+
+-- | Update the hashes of the used files in the ModSummary based on
+-- the information in the HomeModInfo, so that later stability checks
+-- will see the latest information.
+updateUsageFiles :: HomeModInfo -> ModSummary -> ModSummary
+updateUsageFiles mod_info mod = mod { ms_usage_files = usage_files }
+  where
+    usages      = mi_usages (hm_iface mod_info)
+    usage_files = [(file,Just mtime) | UsageFile file mtime <- usages]
 
 -- | Compile a single module.  Always produce a Linkable for it if
 -- successful.  If no compilation happened, return the old Linkable.
@@ -1220,6 +1254,7 @@ summariseFile hsc_env old_summaries file mb_phase obj_allowed maybe_buf
    = do
         let location = ms_location old_summary
 
+        (usage_files_ok,usage_files) <- checkUsageFiles old_summary
         src_timestamp <- get_src_timestamp
                 -- The file exists; we checked in getRootSummary above.
                 -- If it gets removed subsequently, then this 
@@ -1227,7 +1262,7 @@ summariseFile hsc_env old_summaries file mb_phase obj_allowed maybe_buf
                 -- behaviour.
 
                 -- return the cached summary if the source didn't change
-        if ms_hs_date old_summary == src_timestamp
+        summary <- if ms_hs_date old_summary == src_timestamp && usage_files_ok
            then do -- update the object-file timestamp
                   obj_timestamp <-
                     if isObjectTarget (hscTarget (hsc_dflags hsc_env)) 
@@ -1237,6 +1272,11 @@ summariseFile hsc_env old_summaries file mb_phase obj_allowed maybe_buf
                   return old_summary{ ms_obj_date = obj_timestamp }
            else
                 new_summary src_timestamp
+
+        -- Update the usage file mtimes if a usage file has been altered.
+        return $ if usage_files_ok
+                    then summary
+                    else summary { ms_usage_files = usage_files }
 
    | otherwise
    = do src_timestamp <- get_src_timestamp
@@ -1276,6 +1316,7 @@ summariseFile hsc_env old_summaries file mb_phase obj_allowed maybe_buf
                              ms_hspp_buf  = Just buf,
                              ms_srcimps = srcimps, ms_textual_imps = the_imps,
                              ms_hs_date = src_timestamp,
+                             ms_usage_files = [],
                              ms_obj_date = obj_timestamp })
 
 findSummaryBySourceFile :: [ModSummary] -> FilePath -> Maybe ModSummary
@@ -1307,17 +1348,25 @@ summariseModule hsc_env old_summary_map is_boot (L loc wanted_mod)
         let location = ms_location old_summary
             src_fn = expectJust "summariseModule" (ml_hs_file location)
 
+        (usage_files_ok,usage_files) <- checkUsageFiles old_summary
+
                 -- check the modification time on the source file, and
                 -- return the cached summary if it hasn't changed.  If the
                 -- file has disappeared, we need to call the Finder again.
-        case maybe_buf of
-           Just (_,t) -> check_timestamp old_summary location src_fn t
+        maybe_ms <- case maybe_buf of
+           Just (_,t) -> check_timestamp old_summary location src_fn t usage_files_ok
            Nothing    -> do
                 m <- tryIO (getModificationTime src_fn)
                 case m of
-                   Right t -> check_timestamp old_summary location src_fn t
+                   Right t -> check_timestamp old_summary location src_fn t usage_files_ok
                    Left e | isDoesNotExistError e -> find_it
                           | otherwise             -> ioError e
+
+        -- Update the usage file mtimes if a usage file has been altered.
+        return $ case maybe_ms of
+            Nothing -> Nothing
+            Just ms | usage_files_ok -> Just ms
+                    | otherwise      -> Just ms { ms_usage_files = usage_files }
 
   | otherwise  = find_it
   where
@@ -1325,8 +1374,8 @@ summariseModule hsc_env old_summary_map is_boot (L loc wanted_mod)
 
     hsc_src = if is_boot then HsBootFile else HsSrcFile
 
-    check_timestamp old_summary location src_fn src_timestamp
-        | ms_hs_date old_summary == src_timestamp = do
+    check_timestamp old_summary location src_fn src_timestamp usage_files_ok
+        | ms_hs_date old_summary == src_timestamp, usage_files_ok = do
                 -- update the object-file timestamp
                 obj_timestamp <- 
                     if isObjectTarget (hscTarget (hsc_dflags hsc_env))
@@ -1402,8 +1451,22 @@ summariseModule hsc_env old_summary_map is_boot (L loc wanted_mod)
                               ms_srcimps      = srcimps,
                               ms_textual_imps = the_imps,
                               ms_hs_date   = src_timestamp,
+                              ms_usage_files = [],
                               ms_obj_date  = obj_timestamp }))
 
+checkUsageFiles :: ModSummary
+                -> IO (Bool, [(FilePath,Maybe ClockTime)])
+                -- ^ returns whether any usage file has been altered,
+                -- and the entire list of usage files with their modification times updated
+checkUsageFiles summary = do
+    let (usage_files,old_hashes) = unzip (ms_usage_files summary)
+    hashes <- mapM getModificationTimeIfExists usage_files
+    return (hashes == old_hashes, zip usage_files hashes)
+  where
+    getModificationTimeIfExists f = (do t <- getModificationTime f; return (Just t))
+        `catchIO` \e -> if isDoesNotExistError e
+                        then return Nothing
+                        else ioError e
 
 getObjTimestamp :: ModLocation -> Bool -> IO (Maybe ClockTime)
 getObjTimestamp location is_boot
