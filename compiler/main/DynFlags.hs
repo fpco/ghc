@@ -99,6 +99,7 @@ module DynFlags (
 import Platform
 import Module
 import PackageConfig
+import {-# SOURCE #-} Hooks
 import PrelNames        ( mAIN )
 import StaticFlags
 import {-# SOURCE #-} Packages (PackageState)
@@ -528,6 +529,9 @@ data DynFlags = DynFlags {
   pluginModNames        :: [ModuleName],
   pluginModNameOpts     :: [(ModuleName,String)],
 
+  -- GHC API hooks
+  hooks                 :: Hooks,
+
   --  For ghc -M
   depMakefile           :: FilePath,
   depIncludePkgDeps     :: Bool,
@@ -888,6 +892,7 @@ defaultDynFlags mySettings =
 
         pluginModNames          = [],
         pluginModNameOpts       = [],
+        hooks                   = emptyHooks,
 
         outputFile              = Nothing,
         outputHi                = Nothing,

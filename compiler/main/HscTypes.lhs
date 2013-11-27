@@ -13,6 +13,9 @@ module HscTypes (
         Target(..), TargetId(..), pprTarget, pprTargetId,
         ModuleGraph, emptyMG,
 
+        -- * Hsc monad
+        Hsc(..), runHsc,
+
         -- * Information about modules
         ModDetails(..), emptyModDetails,
         ModGuts(..), CgGuts(..), ForeignStubs(..), appendStubC,
@@ -139,7 +142,7 @@ import DataCon
 import PrelNames        ( gHC_PRIM )
 import Packages hiding  ( Version(..) )
 import DynFlags
-import DriverPhases
+import DriverPhases     ( Phase, HscSource(..), isHsBoot, hscSourceString )
 import BasicTypes
 import OptimizationFuel ( OptFuelState )
 import IfaceSyn
@@ -168,6 +171,26 @@ import Data.Typeable    ( Typeable )
 import Exception
 import System.FilePath
 import System.Time      ( ClockTime )
+
+-- -----------------------------------------------------------------------------
+-- The Hsc monad: Passing an enviornment and warning state
+
+newtype Hsc a = Hsc (HscEnv -> WarningMessages -> IO (a, WarningMessages))
+
+instance Monad Hsc where
+    return a    = Hsc $ \_ w -> return (a, w)
+    Hsc m >>= k = Hsc $ \e w -> do (a, w1) <- m e w
+                                   case k a of
+                                       Hsc k' -> k' e w1
+
+instance MonadIO Hsc where
+    liftIO io = Hsc $ \_ w -> do a <- io; return (a, w)
+
+runHsc :: HscEnv -> Hsc a -> IO a
+runHsc hsc_env (Hsc hsc) = do
+    (a, w) <- hsc hsc_env emptyBag
+    printOrThrowWarnings (hsc_dflags hsc_env) w
+    return a
 
 -- -----------------------------------------------------------------------------
 -- Source Errors

@@ -70,6 +70,8 @@ module HscMain
     , hscTcExpr, hscImport, hscKcType
     , hscCompileCoreExpr
 #endif
+    -- * Low-level exports for hooks
+    , hscParse', tcRnModule', getHscEnv
     ) where
 
 #ifdef GHCI
@@ -130,6 +132,7 @@ import NameSet          ( emptyNameSet )
 import InstEnv
 import FamInstEnv
 import Fingerprint      ( Fingerprint )
+import Hooks
 
 import DynFlags
 import ErrUtils
@@ -189,26 +192,6 @@ knownKeyNames =              -- where templateHaskellNames are defined
 #ifdef GHCI
         ++ templateHaskellNames
 #endif
-
--- -----------------------------------------------------------------------------
--- The Hsc monad: Passing an enviornment and warning state
-
-newtype Hsc a = Hsc (HscEnv -> WarningMessages -> IO (a, WarningMessages))
-
-instance Monad Hsc where
-    return a    = Hsc $ \_ w -> return (a, w)
-    Hsc m >>= k = Hsc $ \e w -> do (a, w1) <- m e w
-                                   case k a of
-                                       Hsc k' -> k' e w1
-
-instance MonadIO Hsc where
-    liftIO io = Hsc $ \_ w -> do a <- io; return (a, w)
-
-runHsc :: HscEnv -> Hsc a -> IO a
-runHsc hsc_env (Hsc hsc) = do
-    (a, w) <- hsc hsc_env emptyBag
-    printOrThrowWarnings (hsc_dflags hsc_env) w
-    return a
 
 getWarnings :: Hsc WarningMessages
 getWarnings = Hsc $ \_ w -> return (w, w)
@@ -633,7 +616,7 @@ genericHscRecompile compiler mod_summary mb_old_hash
     | ExtCoreFile <- ms_hsc_src mod_summary =
         panic "GHC does not currently support reading External Core files"
     | otherwise = do
-        tc_result <- hscFileFrontEnd mod_summary
+        tc_result <- getHooked hscFrontendHook hscFileFrontEnd >>= ($ mod_summary)
         hscBackend compiler tc_result mod_summary mb_old_hash
 
 genericHscBackend :: HsCompiler a

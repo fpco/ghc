@@ -33,7 +33,7 @@ import DriverPhases
 import SysTools
 import HscMain
 import Finder
-import HscTypes
+import HscTypes hiding ( Hsc )
 import Outputable
 import Module
 import UniqFM           ( eltsUFM )
