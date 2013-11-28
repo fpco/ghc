@@ -1219,7 +1219,7 @@ forkM_maybe :: SDoc -> IfL a -> IfL (Maybe a)
 -- signatures, which is pretty benign
 
 forkM_maybe doc thing_inside
- = do { unsafeInterleaveM $
+ = do { unsafeInterleaveM $ uninterruptibleMaskM_ $
         do { traceIf (text "Starting fork {" <+> doc)
            ; mb_res <- tryM $
                        updLclEnv (\env -> env { if_loc = if_loc env $$ doc }) $
