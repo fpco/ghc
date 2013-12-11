@@ -2355,6 +2355,8 @@ data ModSummary
           -- ^ Location of the various files belonging to the module
         ms_hs_date      :: UTCTime,
           -- ^ Timestamp of source file
+        ms_usage_files  :: [(FilePath,Maybe Fingerprint)],
+          -- ^ Usage files and their fingerprints
         ms_obj_date     :: Maybe UTCTime,
           -- ^ Timestamp of object, if we have one
         ms_iface_date   :: Maybe UTCTime,
@@ -2421,6 +2423,7 @@ instance Outputable ModSummary where
    ppr ms
       = sep [text "ModSummary {",
              nest 3 (sep [text "ms_hs_date = " <> text (show (ms_hs_date ms)),
+                          text "ms_usage_files = " <> ppr (ms_usage_files ms),
                           text "ms_mod =" <+> ppr (ms_mod ms)
                                 <> text (hscSourceString (ms_hsc_src ms)) <> comma,
                           text "ms_textual_imps =" <+> ppr (ms_textual_imps ms),
