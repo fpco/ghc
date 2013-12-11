@@ -949,6 +949,7 @@ compileCoreToObj simplify cm@(CoreModule{ cm_module = mName })
          -- want. (Thus it doesn't matter what the timestamp
          -- for the (nonexistent) source file is.)
          ms_hs_date = currentTime,
+         ms_usage_files = [],
          ms_obj_date = Nothing,
          -- Only handling the single-module case for now, so no imports.
          ms_srcimps = [],

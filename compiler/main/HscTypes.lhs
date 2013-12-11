@@ -2220,6 +2220,7 @@ data ModSummary
         ms_hsc_src      :: HscSource,           -- ^ The module source either plain Haskell, hs-boot or external core
         ms_location     :: ModLocation,         -- ^ Location of the various files belonging to the module
         ms_hs_date      :: UTCTime,             -- ^ Timestamp of source file
+        ms_usage_files  :: [(FilePath,Maybe Fingerprint)], -- ^ Usage files and their fingerprints
         ms_obj_date     :: Maybe UTCTime,       -- ^ Timestamp of object, if we have one
         ms_srcimps      :: [Located (ImportDecl RdrName)],      -- ^ Source imports of the module
         ms_textual_imps :: [Located (ImportDecl RdrName)],      -- ^ Non-source imports of the module from the module *text*
@@ -2272,6 +2273,7 @@ instance Outputable ModSummary where
    ppr ms
       = sep [text "ModSummary {",
              nest 3 (sep [text "ms_hs_date = " <> text (show (ms_hs_date ms)),
+                          text "ms_usage_files = " <> ppr (ms_usage_files ms),
                           text "ms_mod =" <+> ppr (ms_mod ms)
                                 <> text (hscSourceString (ms_hsc_src ms)) <> comma,
                           text "ms_textual_imps =" <+> ppr (ms_textual_imps ms),
