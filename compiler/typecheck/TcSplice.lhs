@@ -576,8 +576,10 @@ kcTopSpliceType expr
 -- Always at top level
 -- Type sig at top of file:
 --      tcSpliceDecls :: LHsExpr Name -> TcM [LHsDecl RdrName]
-tcSpliceDecls expr
-  = do  { list_q <- tcMetaTy decsQTyConName     -- Q [Dec]
+tcSpliceDecls expr'
+  = do  { expr <- getHooked runRnSpliceHook return >>= ($ expr') 
+  
+        ; list_q <- tcMetaTy decsQTyConName     -- Q [Dec]
         ; zonked_q_expr <- tcTopSpliceExpr (tcMonoExpr expr list_q)
 
                 -- Run the expression

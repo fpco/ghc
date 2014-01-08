@@ -8,23 +8,26 @@ module Hooks ( Hooks
                -- the hooks:
              , hscFrontendHook
              , runQuasiQuoteHook
+             , runRnSpliceHook
              ) where
 
 import DynFlags
+import HsExpr
 import HsTypes
-import Name
 import HscTypes
+import Name
 import TcRnTypes
 
 import Data.Maybe
 import Control.Monad (liftM)
 
 emptyHooks :: Hooks
-emptyHooks = Hooks Nothing Nothing
+emptyHooks = Hooks Nothing Nothing Nothing
 
 data Hooks = Hooks {
     hscFrontendHook   :: Maybe (ModSummary -> Hsc TcGblEnv)
   , runQuasiQuoteHook :: Maybe (HsQuasiQuote Name -> RnM (HsQuasiQuote Name))
+  , runRnSpliceHook   :: Maybe (LHsExpr Name -> RnM (LHsExpr Name))
   }     
 
 getHooked :: (Monad f, HasDynFlags f) => (Hooks -> Maybe a) -> a -> f a
