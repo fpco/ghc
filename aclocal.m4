@@ -812,27 +812,6 @@ AC_SUBST([LdXFlag])
 ])# FP_PROG_LD_X
 
 
-# FP_PROG_LD_HashSize31
-# ------------
-# Sets the output variable LdHashSize31 to --hash-size=31 if ld supports
-# this flag. Otherwise the variable's value is empty.
-AC_DEFUN([FP_PROG_LD_HashSize31],
-[
-FP_PROG_LD_FLAG([--hash-size=31],[LdHashSize31])
-])# FP_PROG_LD_HashSize31
-
-
-# FP_PROG_LD_ReduceMemoryOverheads
-# ------------
-# Sets the output variable LdReduceMemoryOverheads to
-# --reduce-memory-overheads if ld supports this flag.
-# Otherwise the variable's value is empty.
-AC_DEFUN([FP_PROG_LD_ReduceMemoryOverheads],
-[
-FP_PROG_LD_FLAG([--reduce-memory-overheads],[LdReduceMemoryOverheads])
-])# FP_PROG_LD_ReduceMemoryOverheads
-
-
 # FP_PROG_LD_BUILD_ID
 # ------------
 
