@@ -34,7 +34,7 @@ static Task * allocTask (void);
 static Task * newTask   (rtsBool);
 
 #if defined(THREADED_RTS)
-static Mutex all_tasks_mutex;
+Mutex all_tasks_mutex;
 #endif
 
 /* -----------------------------------------------------------------------------
@@ -314,6 +314,11 @@ discardTasksExcept (Task *keep)
     // Wipe the task list, except the current Task.
     ACQUIRE_LOCK(&all_tasks_mutex);
     for (task = all_tasks; task != NULL; task=next) {
+#if defined(THREADED_RTS)
+        // #9295
+        initCondition(&task->cond); 
+        initMutex(&task->lock);
+#endif
         next = task->all_link;
         if (task != keep) {
             debugTrace(DEBUG_sched, "discarding task %ld", (long)TASK_ID(task));

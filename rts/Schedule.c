@@ -1655,6 +1655,10 @@ forkProcess(HsStablePtr *entry
         ACQUIRE_LOCK(&capabilities[i].lock);
     }
 
+#ifdef THREADED_RTS
+    ACQUIRE_LOCK(&all_tasks_mutex);
+#endif
+
     stopTimer(); // See #4074
 
 #if defined(TRACING)
@@ -1676,6 +1680,11 @@ forkProcess(HsStablePtr *entry
             releaseCapability_(&capabilities[i],rtsFalse);
             RELEASE_LOCK(&capabilities[i].lock);
         }
+
+#ifdef THREADED_RTS
+        RELEASE_LOCK(&all_tasks_mutex);
+#endif
+
         boundTaskExiting(task);
 
 	// just return the pid
@@ -1692,6 +1701,8 @@ forkProcess(HsStablePtr *entry
         for (i=0; i < n_capabilities; i++) {
             initMutex(&capabilities[i].lock);
         }
+
+        initMutex(&all_tasks_mutex);
 #endif
 
 #ifdef TRACING
@@ -1776,8 +1787,7 @@ forkProcess(HsStablePtr *entry
 	rts_checkSchedStatus("forkProcess",cap);
 	
 	rts_unlock(cap);
-	hs_exit();                      // clean up and exit
-	stg_exit(EXIT_SUCCESS);
+        shutdownHaskellAndExit(EXIT_SUCCESS); // #9377
     }
 #else /* !FORKPROCESS_PRIMOP_SUPPORTED */
     barf("forkProcess#: primop not supported on this platform, sorry!\n");
